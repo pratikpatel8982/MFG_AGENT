@@ -35,13 +35,9 @@ class Config:
     # Firebase
     FIREBASE_PROJECT_ID: str = os.getenv("FIREBASE_PROJECT_ID", "")
 
-    # ChromaDB — Cloud (production) vs local (dev)
-    # Cloud:  set CHROMA_API_KEY + CHROMA_TENANT + CHROMA_DATABASE
-    # Local:  leave all unset, uses CHROMA_PERSIST_DIR
-    CHROMA_API_KEY:     str = os.getenv("CHROMA_API_KEY", "")
-    CHROMA_TENANT:      str = os.getenv("CHROMA_TENANT", "")
-    CHROMA_DATABASE:    str = os.getenv("CHROMA_DATABASE", "mfg-agent")
-    CHROMA_PERSIST_DIR: str = os.getenv("CHROMA_PERSIST_DIR", "./chroma_data")
+    # Supabase
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
     # Scraper tuning
     MAX_RESULTS:  int = int(os.getenv("MAX_RESULTS", "10"))

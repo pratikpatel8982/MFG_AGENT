@@ -1,3 +1,3 @@
-from .chroma import ChromaStore
+from .store import get_store
 
-__all__ = ["ChromaStore"]
+__all__ = ["get_store"]

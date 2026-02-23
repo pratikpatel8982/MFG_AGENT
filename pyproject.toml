@@ -1,12 +1,11 @@
 [project]
 name = "mfg-agent-ai-supplier-finder"
-version = "0.2.0"
-description = "A multi-agent manufacturing supplier finder with ChromaDB + Firebase auth"
+version = "0.3.0"
+description = "A multi-agent manufacturing supplier finder with Supabase + Firebase auth"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.12.0",
-    "chromadb-client>=0.6.0",
     "duckduckgo-search>=6.1.0",
     "firebase-admin>=6.4.0",
     "flask>=3.0.0",
@@ -16,8 +15,7 @@ dependencies = [
     "requests>=2.31.0",
     "gunicorn>=21.2.0",
     "python-dotenv>=1.2.1",
-    "onnxruntime>=1.24.2",
-    "tokenizers>=0.22.2",
+    "supabase"
 ]
 
 [project.optional-dependencies]

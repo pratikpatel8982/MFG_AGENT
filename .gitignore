@@ -11,9 +11,6 @@ build/
 .env
 backend/firebase_key.json
 
-# ChromaDB local data
-chroma_data/
-
 # IDE
 .vscode/
 .idea/

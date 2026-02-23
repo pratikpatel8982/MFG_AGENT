@@ -27,7 +27,7 @@ from backend.config import cfg
 from backend.agents import ManufacturingOrchestrator, StreamLogger
 from backend.agents.state import request_stop
 from backend.auth import require_auth, optional_auth
-from backend.db.chroma import get_store
+from backend.db.store import get_store
 
 
 def create_app() -> Flask:
@@ -71,7 +71,6 @@ def create_app() -> Flask:
         def run_pipeline():
             try:
                 state = orchestrator.run(user_query, logger, user_id=uid)
-                # Persist to ChromaDB after run completes
                 try:
                     store = get_store()
                     store.log_query(uid, user_query, state.session_id)
@@ -258,7 +257,7 @@ def create_app() -> Flask:
             "serper":       sc.has_serper,
             "ddg_fallback": True,
             "firebase":     bool(cfg.FIREBASE_PROJECT_ID),
-            "chroma":       cfg.CHROMA_PERSIST_DIR or cfg.CHROMA_HOST,
+            "database":     "supabase",
         })
 
     @app.route("/api/stats")
