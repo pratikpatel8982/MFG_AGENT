@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: mfg-agent-backend
+    runtime: python
+    region: oregon
+    plan: starter          # upgrade to 'standard' for production
+    buildCommand: pip install -e .
+    startCommand: python -m backend.app
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # ── Required ──────────────────────────────────────────────────────────
+      - key: GROQ_API_KEY
+        sync: false        # enter manually in Render dashboard
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false        # paste the full JSON string
+      # ── Optional ──────────────────────────────────────────────────────────
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      # ── App config ────────────────────────────────────────────────────────
+      - key: CHROMA_PERSIST_DIR
+        value: /var/data/chroma
+      - key: PORT
+        value: "5000"
+      - key: DEBUG
+        value: "false"
+      - key: CORS_ORIGINS
+        value: "https://your-app.vercel.app"  # update after Vercel deploy
+    disk:
+      name: chroma-data
+      mountPath: /var/data
+      sizeGB: 5
