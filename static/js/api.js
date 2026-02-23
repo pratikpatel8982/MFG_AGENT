@@ -67,3 +67,8 @@ async function apiDownloadJson(sessionId) {
   const token = await getToken();
   window.open(`${API_BASE}/api/download-json/${sessionId}?token=${token}`);
 }
+
+async function apiDownloadPdf(sessionId) {
+  const token = await getToken();
+  window.open(`${API_BASE}/api/download-pdf/${sessionId}?token=${token}`);
+}

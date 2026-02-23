@@ -47,10 +47,16 @@ document.getElementById('main-query').addEventListener('keydown', e => {
 });
 document.getElementById('main-send-btn').addEventListener('click', submitQuery);
 
+function fillInput(text) {
+  const input = document.getElementById('main-query');
+  input.value = text;
+  input.focus();
+}
+
 document.querySelectorAll('.example-chip').forEach(chip => {
   chip.addEventListener('click', () => {
-    document.getElementById('main-query').value = chip.textContent.trim();
-    document.getElementById('main-query').focus();
+    const query = chip.dataset.query;
+    fillInput(query);
   });
 });
 
@@ -58,6 +64,7 @@ document.querySelectorAll('.example-chip').forEach(chip => {
 document.getElementById('stop-btn').addEventListener('click',     stopPipeline);
 document.getElementById('dl-txt-btn').addEventListener('click',   () => apiDownloadTxt(activeSessionId));
 document.getElementById('dl-json-btn').addEventListener('click',  () => apiDownloadJson(activeSessionId));
+document.getElementById('dl-pdf-btn').addEventListener('click', () => apiDownloadPdf(activeSessionId));
 
 // ── Results tabs ───────────────────────────────────────────────────────────
 document.querySelectorAll('.res-tab').forEach((btn, i) => {
@@ -99,6 +106,8 @@ async function loadReport(sessionId) {
     document.getElementById('stop-btn').style.display          = 'none';
     document.getElementById('dl-txt-btn').style.display        = '';
     document.getElementById('dl-json-btn').style.display       = '';
+    document.getElementById('dl-pdf-btn').style.display        = '';
+
 
     setStatus('done');
 
@@ -146,6 +155,8 @@ async function submitQuery() {
   document.getElementById('stop-btn').style.display          = '';
   document.getElementById('dl-txt-btn').style.display        = 'none';
   document.getElementById('dl-json-btn').style.display       = 'none';
+  document.getElementById('dl-pdf-btn').style.display        = 'none';
+
 
   setStatus('running');
   resetProgress();
@@ -196,6 +207,8 @@ function handleSSE(raw) {
       document.getElementById('stop-btn').style.display   = 'none';
       document.getElementById('dl-txt-btn').style.display = '';
       document.getElementById('dl-json-btn').style.display = '';
+      document.getElementById('dl-json-btn').style.display = '';
+
       if (msg.report) renderReport(msg.report);
       toast(`Done! ${msg.meta?.suppliers_found ?? 0} suppliers found in ${msg.meta?.elapsed_seconds}s`, 'success');
       break;

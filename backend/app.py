@@ -244,6 +244,166 @@ def create_app() -> Flask:
         resp.headers["Content-Type"]        = "application/json; charset=utf-8"
         resp.headers["Content-Disposition"] = f'attachment; filename="report_{session_id}.json"'
         return resp
+    
+    @app.route("/api/download-pdf/<session_id>")
+    def download_pdf(session_id: str):
+        from flask import make_response
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+        )
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import inch
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.platypus import PageBreak
+        from reportlab.platypus import Table, TableStyle, Paragraph
+        from reportlab.lib.units import inch
+        import io
+        import re
+
+        _, data, err = _auth_download(session_id)
+        if err:
+            return err
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        elements = []
+
+        styles = getSampleStyleSheet()
+        normal = styles["Normal"]
+        h1 = styles["Heading1"]
+        h2 = styles["Heading2"]
+        h3 = styles["Heading3"]
+
+        # Title
+        elements.append(Paragraph("MFG Agent — Supplier Sourcing Report", h1))
+        elements.append(Spacer(1, 0.3 * inch))
+
+        # Meta block
+        meta_lines = [
+            f"<b>Session:</b> {session_id}",
+            f"<b>Query:</b> {data.get('query','')}",
+            f"<b>Product:</b> {data.get('product','')}",
+            f"<b>Location:</b> {data.get('location','')}",
+            f"<b>Suppliers Found:</b> {data.get('suppliers_found',0)}",
+            f"<b>Sources:</b> {data.get('sources_used','')}",
+        ]
+
+        for line in meta_lines:
+            elements.append(Paragraph(line, normal))
+
+        elements.append(Spacer(1, 0.4 * inch))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.grey))
+        elements.append(Spacer(1, 0.3 * inch))
+
+        # --- Markdown parsing ---
+        from reportlab.platypus import Table, TableStyle
+
+        report_text = data.get("report_text", "")
+        lines = report_text.split("\n")
+        i = 0
+
+        def clean_inline_markdown(text: str) -> str:
+            text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+            text = re.sub(r"(?<!\*)\*(?!\*)(.*?)\*(?<!\*)", r"<i>\1</i>", text)
+            return text
+
+        while i < len(lines):
+            raw = lines[i].strip()
+
+            if not raw:
+                elements.append(Spacer(1, 0.15 * inch))
+                i += 1
+                continue
+
+            # ---- TABLE DETECTION ----
+            if raw.startswith("|"):
+                table_data = []
+
+                while i < len(lines) and lines[i].strip().startswith("|"):
+                    row = lines[i].strip()
+                    cells = [cell.strip() for cell in row.strip("|").split("|")]
+                    table_data.append(cells)
+                    i += 1
+
+                # Remove markdown separator row
+                if len(table_data) > 1 and all("---" in c for c in table_data[1]):
+                    table_data.pop(1)
+
+                # Convert all cells into Paragraphs (enables wrapping)
+                styled_data = []
+                for row in table_data:
+                    styled_row = []
+                    for cell in row:
+                        styled_row.append(Paragraph(clean_inline_markdown(cell), normal))
+                    styled_data.append(styled_row)
+
+                # Fit inside A4 page width (~6.5 inches usable)
+                table = Table(
+                    styled_data,
+                    colWidths=[
+                        1.2 * inch,   # Name
+                        1.2 * inch,   # Location
+                        2.2 * inch,   # Products (wider)
+                        1.2 * inch,   # Certifications
+                        0.8 * inch,   # MOQ
+                        1.2 * inch,   # Website
+                    ],
+                    repeatRows=1
+                )
+
+                table.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]))
+
+                elements.append(Spacer(1, 0.2 * inch))
+                elements.append(table)
+                elements.append(Spacer(1, 0.3 * inch))
+                continue
+
+            # ---- HEADINGS ----
+            if raw.startswith("#### "):
+                elements.append(Paragraph(clean_inline_markdown(raw[5:]), h3))
+
+            elif raw.startswith("### "):
+                elements.append(Paragraph(clean_inline_markdown(raw[4:]), h3))
+
+            elif raw.startswith("## "):
+                elements.append(Paragraph(clean_inline_markdown(raw[3:]), h2))
+
+            elif raw.startswith("# "):
+                elements.append(Paragraph(clean_inline_markdown(raw[2:]), h1))
+
+            # ---- BULLETS ----
+            elif raw.startswith("* "):
+                elements.append(Paragraph("• " + clean_inline_markdown(raw[2:]), normal))
+
+            # ---- NUMBERED ----
+            elif re.match(r"^\d+\.\s", raw):
+                elements.append(Paragraph(clean_inline_markdown(raw), normal))
+
+            else:
+                elements.append(Paragraph(clean_inline_markdown(raw), normal))
+
+            i += 1
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        response = make_response(buffer.read())
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = \
+            f'attachment; filename="report_{session_id}.pdf"'
+
+        return response
 
     # ── Health / Stats ────────────────────────────────────────────────────────
 
