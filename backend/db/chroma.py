@@ -1,89 +1,69 @@
 """
 db/chroma.py — ChromaDB integration.
 
-Collections:
-  • suppliers  — individual supplier records (semantic search by product/description)
-  • reports    — full pipeline reports per session
-  • history    — per-user query history
-
-ChromaDB runs locally by default (persistent on disk).
-Set CHROMA_HOST + CHROMA_API_KEY for ChromaDB Cloud.
+Auto-selects backend:
+  Cloud  → set CHROMA_API_KEY + CHROMA_TENANT + CHROMA_DATABASE
+            (uses chromadb-client HTTP — zero RAM, fully persistent)
+  Local  → set nothing, uses CHROMA_PERSIST_DIR
+            (requires full chromadb package, fine for dev)
 """
 from __future__ import annotations
 import hashlib
-import uuid
 from datetime import datetime
-from typing import Optional
 
 import chromadb
-from chromadb.config import Settings
 
 from backend.config import cfg
 from .models import SupplierRecord, ReportRecord
 
 # ── Singleton client ──────────────────────────────────────────────────────────
 
-_client: chromadb.Client | None = None
+_client = None
 
 
-def _get_client() -> chromadb.Client:
+def _get_client():
     global _client
-    if _client is None:
-        if cfg.CHROMA_HOST:
-            # ChromaDB Cloud or self-hosted HTTP
-            _client = chromadb.HttpClient(
-                host=cfg.CHROMA_HOST,
-                headers={"Authorization": f"Bearer {cfg.CHROMA_API_KEY}"}
-                if cfg.CHROMA_API_KEY
-                else {},
-            )
-        else:
-            # Local persistent storage
-            _client = chromadb.PersistentClient(
-                path=cfg.CHROMA_PERSIST_DIR,
-                settings=Settings(anonymized_telemetry=False),
-            )
+    if _client is not None:
+        return _client
+
+    print(f"[ChromaDB] Cloud — tenant={cfg.CHROMA_TENANT} db={cfg.CHROMA_DATABASE}")
+    _client = chromadb.CloudClient(
+        api_key=cfg.CHROMA_API_KEY,
+        tenant=cfg.CHROMA_TENANT,
+        database=cfg.CHROMA_DATABASE,
+    )
     return _client
 
 
 # ── ChromaStore ───────────────────────────────────────────────────────────────
 
 class ChromaStore:
-    """
-    High-level ChromaDB store for the MFG Agent application.
-
-    Collections:
-      suppliers  — one doc per supplier
-      reports    — one doc per pipeline run
-      history    — one doc per query per user
-    """
-
     SUPPLIERS_COLLECTION = "suppliers"
     REPORTS_COLLECTION   = "reports"
     HISTORY_COLLECTION   = "history"
 
     def __init__(self):
-        self.client = _get_client()
-        self._suppliers = self.client.get_or_create_collection(
+        client = _get_client()
+        # No local embedding function — cloud handles embeddings server-side,
+        # local falls back to ChromaDB's default (only loaded when needed)
+        self._suppliers = client.get_or_create_collection(
             self.SUPPLIERS_COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
-        self._reports = self.client.get_or_create_collection(
+        self._reports = client.get_or_create_collection(
             self.REPORTS_COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
-        self._history = self.client.get_or_create_collection(
+        self._history = client.get_or_create_collection(
             self.HISTORY_COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
 
-    # ── suppliers ─────────────────────────────────────────────────────────────
+    # ── Suppliers ─────────────────────────────────────────────────────────────
 
     def save_suppliers(self, session_id: str, user_id: str, query: str, suppliers: list[dict]):
-        """Upsert all suppliers from a pipeline run."""
         if not suppliers:
             return
-
         ids, docs, metas = [], [], []
         for s in suppliers:
             rec = SupplierRecord(
@@ -104,47 +84,50 @@ class ChromaStore:
             ids.append(rec.id)
             docs.append(rec.to_document())
             metas.append(rec.to_metadata())
-
         self._suppliers.upsert(ids=ids, documents=docs, metadatas=metas)
 
-    def search_suppliers(
-        self,
-        query_text: str,
-        user_id: str = "",
-        n_results: int = 20,
-    ) -> list[dict]:
-        """Semantic search over saved suppliers."""
+    def search_suppliers(self, query_text: str, user_id: str = "", n_results: int = 20) -> list[dict]:
         where = {"user_id": user_id} if user_id else None
         try:
+            count = self._suppliers.count()
+            if count == 0:
+                return []
             results = self._suppliers.query(
                 query_texts=[query_text],
-                n_results=min(n_results, self._suppliers.count() or 1),
+                n_results=min(n_results, count),
                 where=where,
                 include=["documents", "metadatas", "distances"],
             )
             return self._format_query_results(results)
-        except Exception:
+        except Exception as e:
+            print(f"[ChromaDB] search_suppliers error: {e}")
             return []
 
-    def get_user_suppliers(self, user_id: str, limit: int = 100) -> list[dict]:
-        """Get all suppliers for a specific user."""
+    def get_user_suppliers(self, user_id: str, limit: int = 100, session_id: str = None) -> list[dict]:
         try:
+            if session_id:
+                where = {
+                    "$and": [
+                        {"user_id": user_id},
+                        {"session_id": session_id}
+                    ]
+                }
+            else:
+                where = {"user_id": user_id}
+
             results = self._suppliers.get(
-                where={"user_id": user_id},
+                where=where,
                 limit=limit,
-                include=["documents", "metadatas"],
+                include=["metadatas"],
             )
-            return [
-                {**meta, "document": doc}
-                for meta, doc in zip(results["metadatas"], results["documents"])
-            ]
-        except Exception:
+            return list(results["metadatas"])
+        except Exception as e:
+            print(f"[ChromaDB] get_user_suppliers error: {e}")
             return []
 
-    # ── reports ───────────────────────────────────────────────────────────────
+    # ── Reports ───────────────────────────────────────────────────────────────
 
     def save_report(self, state_dict: dict, elapsed: float = 0.0):
-        """Persist a completed pipeline report."""
         rec = ReportRecord(
             id=state_dict["session_id"],
             user_id=state_dict.get("user_id", ""),
@@ -163,77 +146,70 @@ class ChromaStore:
         )
 
     def get_report(self, session_id: str) -> dict | None:
-        """Retrieve a report by session_id."""
         try:
-            r = self._reports.get(ids=[session_id], include=["documents", "metadatas"])
+            r = self._reports.get(ids=[session_id], include=["metadatas"])
             if r["ids"]:
                 meta = dict(r["metadatas"][0])
                 meta["session_id"] = session_id
                 return meta
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[ChromaDB] get_report error: {e}")
         return None
 
     def get_user_reports(self, user_id: str, limit: int = 50) -> list[dict]:
-        """Get all reports for a specific user, newest first."""
         try:
             results = self._reports.get(
                 where={"user_id": user_id},
                 limit=limit,
-                include=["documents", "metadatas"],
+                include=["metadatas"],
             )
             items = [
                 {**meta, "session_id": sid}
                 for meta, sid in zip(results["metadatas"], results["ids"])
             ]
-            # Sort by created_at descending
             return sorted(items, key=lambda x: x.get("created_at", ""), reverse=True)
-        except Exception:
+        except Exception as e:
+            print(f"[ChromaDB] get_user_reports error: {e}")
             return []
 
     def delete_report(self, session_id: str):
-        """Delete a report and its associated suppliers from ChromaDB."""
         try:
             self._reports.delete(ids=[session_id])
         except Exception:
             pass
-        # Also remove suppliers from this session
         try:
-            results = self._suppliers.get(
-                where={"session_id": session_id}, include=[]
-            )
+            results = self._suppliers.get(where={"session_id": session_id}, include=[])
             if results["ids"]:
                 self._suppliers.delete(ids=results["ids"])
         except Exception:
             pass
-        # Remove from history
         try:
-            results = self._history.get(
-                where={"session_id": session_id}, include=[]
-            )
+            results = self._history.get(where={"session_id": session_id}, include=[])
             if results["ids"]:
                 self._history.delete(ids=results["ids"])
         except Exception:
             pass
 
     def search_reports(self, query_text: str, user_id: str = "", n_results: int = 10) -> list[dict]:
-        """Semantic search over reports."""
         where = {"user_id": user_id} if user_id else None
         try:
+            count = self._reports.count()
+            if count == 0:
+                return []
             results = self._reports.query(
                 query_texts=[query_text],
-                n_results=min(n_results, self._reports.count() or 1),
+                n_results=min(n_results, count),
                 where=where,
                 include=["documents", "metadatas", "distances"],
             )
             return self._format_query_results(results)
-        except Exception:
+        except Exception as e:
+            print(f"[ChromaDB] search_reports error: {e}")
             return []
 
-    # ── history ───────────────────────────────────────────────────────────────
+    # ── History ───────────────────────────────────────────────────────────────
 
     def log_query(self, user_id: str, query: str, session_id: str):
-        """Log a user query to history collection."""
         entry_id = f"{user_id}_{session_id}"
         self._history.upsert(
             ids=[entry_id],
@@ -247,33 +223,35 @@ class ChromaStore:
         )
 
     def get_user_history(self, user_id: str, limit: int = 20) -> list[dict]:
-        """Get recent queries for a user, newest first."""
         try:
             results = self._history.get(
                 where={"user_id": user_id},
                 limit=limit,
                 include=["metadatas"],
             )
-            items = results["metadatas"]
-            return sorted(items, key=lambda x: x.get("created_at", ""), reverse=True)
-        except Exception:
+            return sorted(results["metadatas"], key=lambda x: x.get("created_at", ""), reverse=True)
+        except Exception as e:
+            print(f"[ChromaDB] get_user_history error: {e}")
             return []
 
     def similar_queries(self, query_text: str, user_id: str = "", n: int = 5) -> list[dict]:
-        """Find semantically similar past queries."""
         where = {"user_id": user_id} if user_id else None
         try:
+            count = self._history.count()
+            if count == 0:
+                return []
             results = self._history.query(
                 query_texts=[query_text],
-                n_results=min(n, self._history.count() or 1),
+                n_results=min(n, count),
                 where=where,
                 include=["documents", "metadatas", "distances"],
             )
             return self._format_query_results(results)
-        except Exception:
+        except Exception as e:
+            print(f"[ChromaDB] similar_queries error: {e}")
             return []
 
-    # ── stats ─────────────────────────────────────────────────────────────────
+    # ── Stats ─────────────────────────────────────────────────────────────────
 
     def get_stats(self) -> dict:
         return {
@@ -282,7 +260,7 @@ class ChromaStore:
             "total_queries":   self._history.count(),
         }
 
-    # ── helpers ───────────────────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def _format_query_results(results: dict) -> list[dict]:
@@ -300,10 +278,9 @@ class ChromaStore:
         return out
 
 
-# ── Singleton instance ────────────────────────────────────────────────────────
+# ── Singleton ─────────────────────────────────────────────────────────────────
 
 _store: ChromaStore | None = None
-
 
 def get_store() -> ChromaStore:
     global _store

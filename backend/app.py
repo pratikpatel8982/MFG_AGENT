@@ -180,9 +180,12 @@ def create_app() -> Flask:
     @app.route("/api/suppliers")
     @require_auth
     def suppliers_endpoint(user: dict):
-        limit = min(int(request.args.get("limit", 100)), 500)
+        limit      = min(int(request.args.get("limit", 100)), 500)
+        session_id = request.args.get("session_id", "").strip()
         try:
-            items = get_store().get_user_suppliers(user["uid"], limit=limit)
+            items = get_store().get_user_suppliers(
+                user["uid"], limit=limit, session_id=session_id or None
+            )
         except Exception as e:
             items = []
         return jsonify({"suppliers": items})
@@ -268,5 +271,8 @@ def create_app() -> Flask:
         return jsonify(stats)
 
     return app
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 app = create_app()

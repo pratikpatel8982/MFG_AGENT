@@ -25,30 +25,33 @@ _load_dotenv()
 
 class Config:
     # LLM
-    GROQ_API_KEY: str   = os.getenv("GROQ_API_KEY", "")
-    GROQ_MODEL: str     = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
     # Search APIs
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
     SERPER_API_KEY: str = os.getenv("SERPER_API_KEY", "")
 
-    # Firebase — credentials loaded from backend/firebase_key.json directly
-    FIREBASE_PROJECT_ID: str = os.getenv("FIREBASE_PROJECT_ID", "")  # optional, for reference
+    # Firebase
+    FIREBASE_PROJECT_ID: str = os.getenv("FIREBASE_PROJECT_ID", "")
 
-    # ChromaDB
+    # ChromaDB — Cloud (production) vs local (dev)
+    # Cloud:  set CHROMA_API_KEY + CHROMA_TENANT + CHROMA_DATABASE
+    # Local:  leave all unset, uses CHROMA_PERSIST_DIR
+    CHROMA_API_KEY:     str = os.getenv("CHROMA_API_KEY", "")
+    CHROMA_TENANT:      str = os.getenv("CHROMA_TENANT", "")
+    CHROMA_DATABASE:    str = os.getenv("CHROMA_DATABASE", "mfg-agent")
     CHROMA_PERSIST_DIR: str = os.getenv("CHROMA_PERSIST_DIR", "./chroma_data")
-    CHROMA_HOST: str        = os.getenv("CHROMA_HOST", "")
-    CHROMA_API_KEY: str     = os.getenv("CHROMA_API_KEY", "")
 
     # Scraper tuning
-    MAX_RESULTS: int  = int(os.getenv("MAX_RESULTS", "10"))
+    MAX_RESULTS:  int = int(os.getenv("MAX_RESULTS", "10"))
     SCRAPE_LIMIT: int = int(os.getenv("SCRAPE_LIMIT", "5"))
-    TIMEOUT: int      = int(os.getenv("TIMEOUT", "12"))
+    TIMEOUT:      int = int(os.getenv("TIMEOUT", "12"))
 
     # Server
-    PORT: int    = int(os.getenv("PORT", "5000"))
-    HOST: str    = os.getenv("HOST", "0.0.0.0")
-    DEBUG: bool  = os.getenv("DEBUG", "false").lower() == "true"
+    PORT:  int  = int(os.getenv("PORT", "5000"))
+    HOST:  str  = os.getenv("HOST", "0.0.0.0")
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
     # CORS
     CORS_ORIGINS: list[str] = [
@@ -62,8 +65,6 @@ class Config:
         errors = []
         if not cls.GROQ_API_KEY:
             errors.append("GROQ_API_KEY is required")
-        if not cls.FIREBASE_PROJECT_ID:
-            errors.append("FIREBASE_PROJECT_ID is required for auth")
         if errors:
             raise EnvironmentError("Config errors:\n" + "\n".join(f"  • {e}" for e in errors))
 

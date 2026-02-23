@@ -90,22 +90,35 @@ function completeProgress() {
 
 // ── Supplier cards ─────────────────────────────────────────────────────────
 function renderSuppliers(list) {
-  document.getElementById('suppliers-grid').innerHTML = list.map(s => `
-    <div class="supplier-card">
-      <div class="sc-name">${esc(s.name || 'Unknown')}</div>
-      <div class="sc-location">📍 ${esc(s.location || 'Unknown')}</div>
-      ${s.description ? `<div class="sc-desc">${esc(s.description)}</div>` : ''}
-      <div class="sc-tags">
-        ${(s.products || []).slice(0,4).map(p => `<span class="tag">${esc(p)}</span>`).join('')}
-        ${(s.certifications || []).map(c => `<span class="tag cert">${esc(c)}</span>`).join('')}
-        ${s.min_order ? `<span class="tag">MOQ: ${esc(s.min_order)}</span>` : ''}
+  const grid = document.getElementById('suppliers-grid');
+
+  grid.innerHTML = list.map(s => {
+    const products = Array.isArray(s.products)
+      ? s.products
+      : (s.products ? s.products.split(',').map(p => p.trim()) : []);
+
+    const certifications = Array.isArray(s.certifications)
+      ? s.certifications
+      : (s.certifications ? s.certifications.split(',').map(c => c.trim()) : []);
+
+    return `
+      <div class="supplier-card">
+        <div class="sc-name">${esc(s.name || 'Unknown')}</div>
+        <div class="sc-location">📍 ${esc(s.location || 'Unknown')}</div>
+        ${s.description ? `<div class="sc-desc">${esc(s.description)}</div>` : ''}
+        <div class="sc-tags">
+          ${products.slice(0,4).map(p => `<span class="tag">${esc(p)}</span>`).join('')}
+          ${certifications.map(c => `<span class="tag cert">${esc(c)}</span>`).join('')}
+          ${s.min_order ? `<span class="tag">MOQ: ${esc(s.min_order)}</span>` : ''}
+        </div>
+        <div class="sc-footer">
+          ${s.website ? `<a class="sc-link" href="${esc(s.website)}" target="_blank" rel="noopener">🌐 Website</a>` : ''}
+          ${s.contact  ? `<a class="sc-link" href="mailto:${esc(s.contact)}">✉ Contact</a>` : ''}
+        </div>
       </div>
-      <div class="sc-footer">
-        ${s.website ? `<a class="sc-link" href="${esc(s.website)}" target="_blank" rel="noopener">🌐 Website</a>` : ''}
-        ${s.contact  ? `<a class="sc-link" href="mailto:${esc(s.contact)}">✉ Contact</a>` : ''}
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+
   document.getElementById('supp-count').textContent = `(${list.length})`;
 }
 

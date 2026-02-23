@@ -93,17 +93,27 @@ async function loadReport(sessionId) {
     showResultsScreen();
     document.getElementById('results-query-label').textContent = data.query || '';
     document.getElementById('log-panel').innerHTML             = '';
+    document.getElementById('suppliers-grid').innerHTML        = '';
+    document.getElementById('supp-count').textContent          = '';
     document.getElementById('progress-wrap').style.display     = 'none';
     document.getElementById('stop-btn').style.display          = 'none';
     document.getElementById('dl-txt-btn').style.display        = '';
     document.getElementById('dl-json-btn').style.display       = '';
 
     setStatus('done');
+
+    // Load report text
     const reportText = data.report_text || data.document || '';
     if (reportText) {
       renderReport(reportText);
       showResultTab('report');
     }
+
+    // Load suppliers for this session in the background
+    apiGetSuppliersBySession(sessionId).then(({ suppliers }) => {
+      if (suppliers?.length) renderSuppliers(suppliers);
+    }).catch(() => {});
+
     closeSidebar();
   } catch (e) {
     toast('Could not load report', 'error');

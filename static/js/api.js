@@ -49,6 +49,14 @@ async function apiStop(sessionId) {
   });
 }
 
+// ── Suppliers by session ──────────────────────────────────────────────────
+async function apiGetSuppliersBySession(sessionId) {
+  const h = await apiHeaders();
+  const r = await fetch(`${API_BASE}/api/suppliers?session_id=${encodeURIComponent(sessionId)}`, { headers: h });
+  if (!r.ok) throw new Error(`GET /api/suppliers → ${r.status}`);
+  return r.json(); // { suppliers: [...] }
+}
+
 // ── Downloads (opened as window.open since browser can't set headers) ──────
 async function apiDownloadTxt(sessionId) {
   const token = await getToken();
