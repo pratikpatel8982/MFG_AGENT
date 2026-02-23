@@ -29,7 +29,7 @@ services:
       - key: DEBUG
         value: "false"
       - key: CORS_ORIGINS
-        value: "https://your-app.vercel.app"  # update after Vercel deploy
+        value: "https://mfg-agent.vercel.app/"  # update after Vercel deploy
     disk:
       name: chroma-data
       mountPath: /var/data
