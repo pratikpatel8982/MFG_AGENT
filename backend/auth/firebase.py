@@ -33,39 +33,29 @@ def _init_firebase():
     import firebase_admin
     from firebase_admin import credentials
     import json
+    import base64
 
     if firebase_admin._apps:
         _firebase_initialized = True
         return
 
-    # ── 1️⃣ Production: Use environment variable if available ──
-    firebase_env = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    firebase_b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
 
-    if firebase_env:
-        try:
-            firebase_dict = json.loads(firebase_env)
-            cred = credentials.Certificate(firebase_dict)
-            firebase_admin.initialize_app(cred)
-            _firebase_initialized = True
-            print("[Auth] Firebase initialized from environment variable")
-            return
-        except Exception as e:
-            raise RuntimeError(f"Invalid FIREBASE_CREDENTIALS_JSON: {e}")
-
-    # ── 2️⃣ Local fallback: Use firebase_key.json file ──
-    if not os.path.exists(_KEY_PATH):
-        raise FileNotFoundError(
-            f"Firebase key not found at: {_KEY_PATH}\n"
-            "  → Download it from Firebase Console → Project Settings → "
-            "Service Accounts → Generate new private key\n"
-            "  → Save it as backend/firebase_key.json"
+    if not firebase_b64:
+        raise RuntimeError(
+            "FIREBASE_CREDENTIALS_B64 environment variable is not set."
         )
 
-    cred = credentials.Certificate(_KEY_PATH)
-    firebase_admin.initialize_app(cred)
-    _firebase_initialized = True
-    print(f"[Auth] Firebase initialized from {_KEY_PATH}")
-
+    try:
+        firebase_dict = json.loads(
+            base64.b64decode(firebase_b64).decode("utf-8")
+        )
+        cred = credentials.Certificate(firebase_dict)
+        firebase_admin.initialize_app(cred)
+        _firebase_initialized = True
+        print("[Auth] Firebase initialized from base64 env")
+    except Exception as e:
+        raise RuntimeError(f"Invalid FIREBASE_CREDENTIALS_B64: {e}")
 
 def verify_token(id_token: str) -> dict | None:
     """
