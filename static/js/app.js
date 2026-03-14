@@ -207,7 +207,7 @@ function handleSSE(raw) {
       document.getElementById('stop-btn').style.display   = 'none';
       document.getElementById('dl-txt-btn').style.display = '';
       document.getElementById('dl-json-btn').style.display = '';
-      document.getElementById('dl-json-btn').style.display = '';
+      document.getElementById('dl-pdf-btn').style.display = '';
 
       if (msg.report) renderReport(msg.report);
       toast(`Done! ${msg.meta?.suppliers_found ?? 0} suppliers found in ${msg.meta?.elapsed_seconds}s`, 'success');
