@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mfg-agent-config
+data:
+  PORT: "8000"
+  HOST: "0.0.0.0"
+  DEBUG: "false"
+  MAX_RESULTS: "10"
+  SCRAPE_LIMIT: "5"
+  TIMEOUT: "12"
+  CORS_ORIGINS: "http://localhost:3000"
