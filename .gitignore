@@ -19,3 +19,5 @@ backend/firebase_key.json
 # uv build artifacts
 *.egg-info/
 mfg_agent_ai_supplier_finder.egg-info/
+
+k8s/secret.yaml
