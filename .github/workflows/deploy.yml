@@ -39,6 +39,8 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
+            export KUBECONFIG=/home/ec2-user/.kube/config
             docker pull pratikpatel8982/mfg-agent:${{ github.sha }}
             kubectl set image deployment/mfg-agent-deployment \
             mfg-agent=pratikpatel8982/mfg-agent:${{ github.sha }}
+            kubectl rollout status deployment/mfg-agent-deployment
