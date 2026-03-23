@@ -35,3 +35,13 @@ Thumbs.db
 
 # Swap files
 *.swp
+
+# yml
+k8s/*
+render.yaml
+vercel.json
+
+# README files
+DEPLOYMENT.md
+README.md
+
