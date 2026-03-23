@@ -1,0 +1,44 @@
+name: Deploy to EC2 Kubernetes
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2️⃣ Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 3️⃣ Build image
+      - name: Build Docker Image
+        run: |
+          docker build -t pratikpatel8982/mfg-agent:${{ github.sha }} .
+
+      # 4️⃣ Push image
+      - name: Push Docker Image
+        run: |
+          docker push pratikpatel8982/mfg-agent:${{ github.sha }}
+
+      # 5️⃣ Deploy to EC2
+      - name: SSH to EC2 and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            docker pull pratikpatel8982/mfg-agent:${{ github.sha }}
+            kubectl set image deployment/mfg-agent-deployment \
+            mfg-agent=pratikpatel8982/mfg-agent:${{ github.sha }}
